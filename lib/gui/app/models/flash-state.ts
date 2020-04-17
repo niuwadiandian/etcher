@@ -66,6 +66,24 @@ export function unsetFlashingFlag(results: {
 	});
 }
 
+export function setDevicePaths(devicePaths: string[]) {
+	store.dispatch({
+		type: Actions.SET_DEVICE_PATHS,
+		data: devicePaths,
+	});
+}
+
+export function addFailedDevicePath(devicePath: string) {
+	const failedDevicePathsSet = new Set(
+		store.getState().toJS().failedDevicePaths,
+	);
+	failedDevicePathsSet.add(devicePath);
+	store.dispatch({
+		type: Actions.SET_FAILED_DEVICE_PATHS,
+		data: Array.from(failedDevicePathsSet),
+	});
+}
+
 /**
  * @summary Set the flashing state
  */
@@ -74,7 +92,8 @@ export function setProgressState(
 ) {
 	// Preserve only one decimal place
 	const PRECISION = 1;
-	const data = _.assign({}, state, {
+	const data = {
+		...state,
 		percentage:
 			state.percentage !== undefined && _.isFinite(state.percentage)
 				? Math.floor(state.percentage)
@@ -87,7 +106,7 @@ export function setProgressState(
 
 			return null;
 		}),
-	});
+	};
 
 	store.dispatch({
 		type: Actions.SET_FLASH_STATE,
