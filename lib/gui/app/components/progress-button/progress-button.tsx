@@ -17,7 +17,6 @@
 import * as React from 'react';
 import { ProgressBar } from 'rendition';
 import { default as styled } from 'styled-components';
-import { Color } from 'sys-class-rgb-led';
 
 import { StepButton } from '../../styled-components';
 
@@ -50,18 +49,10 @@ interface ProgressButtonProps {
 	callback: () => void;
 }
 
-export const decompressingColor: Color = [0, 0.682, 0.937];
-export const flashingColor: Color = [0.855, 0.376, 1];
-export const verifyingColor: Color = [0.102, 0.757, 0.212];
-
-function colorToHex(color: Color) {
-	return '#' + color.map((v) => Math.round(v * 255).toString(16)).join('');
-}
-
 const colors = {
-	decompressing: colorToHex(decompressingColor),
-	flashing: colorToHex(flashingColor),
-	verifying: colorToHex(verifyingColor),
+	decompressing: '#0aeef',
+	flashing: '#da60ff',
+	verifying: '#1ac136',
 } as const;
 
 export class ProgressButton extends React.Component<ProgressButtonProps> {

@@ -17,10 +17,6 @@
 import { AnimationFunction, Color, RGBLed } from 'sys-class-rgb-led';
 
 import { isSourceDrive } from '../../../shared/drive-constraints';
-import {
-	flashingColor,
-	verifyingColor,
-} from '../components/progress-button/progress-button';
 import * as settings from './settings';
 import { observe } from './store';
 
@@ -48,6 +44,7 @@ const green: Color = [0, 1, 0];
 const blue: Color = [0, 0, 1];
 const white: Color = [1, 1, 1];
 const black: Color = [0, 0, 0];
+const purple: Color = [0.5, 0, 0.5];
 
 function createAnimationFunction(
 	intensityFunction: (t: number) => number,
@@ -68,8 +65,8 @@ function breathe(t: number) {
 }
 
 const breatheBlue = createAnimationFunction(breathe, blue);
-const blinkGreen = createAnimationFunction(blink, verifyingColor);
-const blinkPurple = createAnimationFunction(blink, flashingColor);
+const blinkGreen = createAnimationFunction(blink, green);
+const blinkPurple = createAnimationFunction(blink, purple);
 
 // Source slot (1st slot): behaves as a target unless it is chosen as source
 //  No drive: black
@@ -124,7 +121,15 @@ export function updateLeds(
 			setLeds(new Set([sourceDrivePath]), blue);
 		}
 	}
-	console.log('step', step, unplugged, plugged, selectedOk, selectedFailed);
+	console.log(
+		'step',
+		sourceDrivePath,
+		step,
+		unplugged,
+		plugged,
+		selectedOk,
+		selectedFailed,
+	);
 
 	if (step === 'main') {
 		setLeds(unplugged, black);
