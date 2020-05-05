@@ -55,7 +55,7 @@ const selectImageNoNilFields = ['path', 'extension'];
 /**
  * @summary Application default state
  */
-const DEFAULT_STATE = Immutable.fromJS({
+export const DEFAULT_STATE = Immutable.fromJS({
 	applicationSessionUuid: '',
 	flashingWorkflowUuid: '',
 	availableDrives: [],
@@ -260,7 +260,6 @@ function storeReducer(
 			if (action.data.type === 'flashing') {
 				ret = ret.set('lastAverageFlashingSpeed', action.data.averageSpeed);
 			}
-			console.log('SFS', action.data);
 			return ret;
 		}
 

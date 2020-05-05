@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
+import { Drive as DrivelistDrive } from 'drivelist';
+import * as _ from 'lodash';
 import { AnimationFunction, Color, RGBLed } from 'sys-class-rgb-led';
 
 import { isSourceDrive } from '../../../shared/drive-constraints';
 import * as settings from './settings';
-import { observe } from './store';
+import { DEFAULT_STATE, observe } from './store';
 
 const leds: Map<string, RGBLed> = new Map();
 
@@ -68,6 +70,14 @@ const breatheBlue = createAnimationFunction(breathe, blue);
 const blinkGreen = createAnimationFunction(blink, green);
 const blinkPurple = createAnimationFunction(blink, purple);
 
+interface LedsState {
+	step: 'main' | 'flashing' | 'verifying' | 'finish';
+	sourceDrive: string | undefined;
+	availableDrives: string[];
+	selectedDrives: string[];
+	failedDrives: string[];
+}
+
 // Source slot (1st slot): behaves as a target unless it is chosen as source
 //  No drive: black
 //  Drive plugged: blue - on
@@ -83,13 +93,13 @@ const blinkPurple = createAnimationFunction(blink, purple);
 // +----------------+---------------+-----------------------------+----------------------------+---------------------------------+
 // | drive selected | white         | blink purple, red if failed | blink green, red if failed | green if success, red if failed |
 // +----------------+---------------+-----------------------------+----------------------------+---------------------------------+
-export function updateLeds(
-	step: 'main' | 'flashing' | 'verifying' | 'finish',
-	sourceDrivePath: string | undefined,
-	availableDrives: string[],
-	selectedDrives: string[],
-	failedDrives: string[],
-) {
+export function updateLeds({
+	step,
+	sourceDrive,
+	availableDrives,
+	selectedDrives,
+	failedDrives,
+}: LedsState) {
 	const unplugged = new Set(leds.keys());
 	const plugged = new Set(availableDrives);
 	const selectedOk = new Set(selectedDrives);
@@ -111,26 +121,16 @@ export function updateLeds(
 	}
 
 	// Handle source slot
-	if (sourceDrivePath !== undefined) {
-		if (unplugged.has(sourceDrivePath)) {
-			unplugged.delete(sourceDrivePath);
+	if (sourceDrive !== undefined) {
+		if (unplugged.has(sourceDrive)) {
+			unplugged.delete(sourceDrive);
 			// TODO
-			setLeds(new Set([sourceDrivePath]), breatheBlue, 2);
-		} else if (plugged.has(sourceDrivePath)) {
-			plugged.delete(sourceDrivePath);
-			setLeds(new Set([sourceDrivePath]), blue);
+			setLeds(new Set([sourceDrive]), breatheBlue, 2);
+		} else if (plugged.has(sourceDrive)) {
+			plugged.delete(sourceDrive);
+			setLeds(new Set([sourceDrive]), blue);
 		}
 	}
-	console.log(
-		'step',
-		sourceDrivePath,
-		step,
-		unplugged,
-		plugged,
-		selectedOk,
-		selectedFailed,
-	);
-
 	if (step === 'main') {
 		setLeds(unplugged, black);
 		setLeds(plugged, black);
@@ -139,12 +139,12 @@ export function updateLeds(
 	} else if (step === 'flashing') {
 		setLeds(unplugged, black);
 		setLeds(plugged, black);
-		setLeds(selectedOk, blinkGreen, 2);
+		setLeds(selectedOk, blinkPurple, 2);
 		setLeds(selectedFailed, red);
 	} else if (step === 'verifying') {
 		setLeds(unplugged, black);
 		setLeds(plugged, black);
-		setLeds(selectedOk, blinkPurple, 2);
+		setLeds(selectedOk, blinkGreen, 2);
 		setLeds(selectedFailed, red);
 	} else if (step === 'finish') {
 		setLeds(unplugged, black);
@@ -157,6 +157,46 @@ export function updateLeds(
 interface DeviceFromState {
 	devicePath?: string;
 	device: string;
+}
+
+let ledsState: LedsState | undefined;
+
+function stateObserver(state: typeof DEFAULT_STATE) {
+	const s = state.toJS();
+	let step: 'main' | 'flashing' | 'verifying' | 'finish';
+	if (s.isFlashing) {
+		step = s.flashState.type;
+	} else {
+		step = s.lastAverageFlashingSpeed == null ? 'main' : 'finish';
+	}
+	const availableDrives = s.availableDrives.filter(
+		(d: DeviceFromState) => d.devicePath,
+	);
+	const sourceDrivePath = availableDrives.filter((d: DrivelistDrive) =>
+		isSourceDrive(d, s.selection.image),
+	)[0]?.devicePath;
+	const availableDrivesPaths = availableDrives.map(
+		(d: DeviceFromState) => d.devicePath,
+	);
+	let selectedDrivesPaths: string[];
+	if (step === 'main') {
+		selectedDrivesPaths = availableDrives
+			.filter((d: DrivelistDrive) => s.selection.devices.includes(d.device))
+			.map((d: DrivelistDrive) => d.devicePath);
+	} else {
+		selectedDrivesPaths = s.devicePaths;
+	}
+	const newLedsState = {
+		step,
+		sourceDrive: sourceDrivePath,
+		availableDrives: availableDrivesPaths,
+		selectedDrives: selectedDrivesPaths,
+		failedDrives: s.failedDevicePaths,
+	};
+	if (!_.isEqual(newLedsState, ledsState)) {
+		updateLeds(newLedsState);
+		ledsState = newLedsState;
+	}
 }
 
 export async function init(): Promise<void> {
@@ -174,30 +214,5 @@ export async function init(): Promise<void> {
 	for (const [drivePath, ledsNames] of Object.entries(ledsMapping)) {
 		leds.set('/dev/disk/by-path/' + drivePath, new RGBLed(ledsNames));
 	}
-	observe((state) => {
-		const s = state.toJS();
-		let step: 'main' | 'flashing' | 'verifying' | 'finish';
-		if (s.isFlashing) {
-			step = s.flashState.type;
-		} else {
-			step = s.lastAverageFlashingSpeed == null ? 'main' : 'finish';
-		}
-		console.log('new state', s);
-		const availableDrives = s.availableDrives.filter(
-			(d: DeviceFromState) => d.devicePath,
-		);
-		const sourceDrivePath = availableDrives.filter(isSourceDrive)[0]
-			?.devicePath;
-		console.log('source drive', sourceDrivePath);
-		const availableDrivesPaths = availableDrives.map(
-			(d: DeviceFromState) => d.devicePath,
-		);
-		updateLeds(
-			step,
-			sourceDrivePath,
-			availableDrivesPaths,
-			s.devicePaths,
-			s.failedDevicePaths,
-		);
-	});
+	observe(_.debounce(stateObserver, 1000, { maxWait: 1000 }));
 }
